@@ -115,19 +115,12 @@
   </div>
 
   <div class="card">
-    <h3 onclick="toggleMaint()">
-      Maintenance <span class="arrow" id="arrow">▶</span>
-    </h3>
-    <div class="status-grid" id="statusGrid">
-      <div class="status-item"><div class="label">Door</div><div class="value" id="sDoor">-</div></div>
-      <div class="status-item"><div class="label">WiFi</div><div class="value" id="sWifi">-</div></div>
-      <div class="status-item"><div class="label">RSSI</div><div class="value" id="sRssi">-</div></div>
-      <div class="status-item"><div class="label">HomeKit</div><div class="value" id="sHk">-</div></div>
-      <div class="status-item"><div class="label">Heap</div><div class="value" id="sHeap">-</div></div>
-      <div class="status-item"><div class="label">Firmware</div><div class="value" id="sVer">-</div></div>
-    </div>
+   <div class="card">
+    <h3>Maintenance</h3>
+    <button class="btn-ap" id="btnAp" onclick="confirmEnableAP()">Enable AP / Config Mode</button>
+   </div>
+
     <div id="maintButtons" style="display:none;">
-      <button class="btn-status" disabled id="btnStatus" onclick="sendCmd('S')">Refresh Status</button>
       <button class="btn-ap" disabled id="btnAp" onclick="confirmEnableAP()">Enable AP / Config Mode</button>
     </div>
   </div>
