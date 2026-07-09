@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Garage Door BLE Remote</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg,#e3f2fd,#f5faff);
+    padding: 16px;
+    max-width: 420px;
+    margin: 0 auto;
+    color: #1a2b4c;
+  }
+  h2 {
+    text-align: center;
+    color: #0d6efd;
+    font-weight: 700;
+    margin: 10px 0 20px;
+    font-size: 22px;
+  }
+  .card {
+    background: white;
+    padding: 16px;
+    border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(13,110,253,0.08);
+    margin-bottom: 14px;
+    border: 1px solid #e8f1fc;
+  }
+  .conn-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #d0d7de; flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .dot.connected { background: #34a853; box-shadow: 0 0 6px #34a853; }
+  .dot.connecting { background: #fbbc04; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  #connLabel { font-weight: 600; font-size: 14px; flex: 1; }
+  button {
+    border: none; border-radius: 10px; color: white;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    padding: 12px; transition: opacity .15s, transform .1s;
+  }
+  button:active { opacity: .75; transform: scale(.98); }
+  button:disabled { background: #cfd8e3 !important; color: #94a3b8; cursor: not-allowed; }
+  .btn-connect { background: linear-gradient(135deg,#42a5f5,#1e88e5); width: 100%; margin-top: 10px; }
+
+  .pwd-row { display:flex; gap:8px; margin-top:10px; }
+  .pwd-row input {
+    flex:1; padding:10px; border:1px solid #cfd8e3; border-radius:8px;
+    font-size:14px;
+  }
+
+  .door-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+  }
+  .btn-open  { background: linear-gradient(135deg,#66bb6a,#34a853); }
+  .btn-stop  { background: linear-gradient(135deg,#ffca28,#fbbc04); color:#333; }
+  .btn-close { background: linear-gradient(135deg,#ef5350,#ea4335); }
+  .door-grid button { padding: 18px 4px; font-size: 14px; }
+
+  .card h3 {
+    margin: 0 0 10px; font-size: 15px; color: #1a2b4c;
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer;
+  }
+  .arrow { transition: transform .2s; font-size: 12px; color:#7a8aa0; }
+  .arrow.open { transform: rotate(90deg); }
+
+  .status-grid { display:none; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; margin-bottom:10px; }
+  .status-grid.visible { display:grid; }
+  .status-item { background:#f5faff; border-radius:8px; padding:8px 10px; }
+  .status-item .label { color:#7a8aa0; font-size:11px; }
+  .status-item .value { font-weight:600; color:#1a2b4c; }
+
+  .btn-status { background: linear-gradient(135deg,#5c6bc0,#3949ab); width:100%; }
+  .btn-ap { background: linear-gradient(135deg,#ff7043,#e64a19); width:100%; margin-top:10px; }
+
+  #log {
+    background: #0f1b2d; color: #4fd1c5; padding: 12px;
+    border-radius: 10px; font-size: 12px; height: 130px;
+    overflow-y: auto; white-space: pre-wrap;
+    font-family: 'Consolas', monospace;
+  }
+</style>
+</head>
+<body>
+  <h2>🚪 Garage Door — BLE Remote</h2>
+
+  <div class="card">
+    <div class="conn-row">
+      <div class="dot" id="dot"></div>
+      <span id="connLabel">Not connected</span>
+    </div>
+    <div class="pwd-row">
+      <input type="password" id="pwd" placeholder="BLE password" autocomplete="off">
+    </div>
+    <button class="btn-connect" id="btnConnect" onclick="connectBLE()">Connect to Device</button>
+  </div>
+
+  <div class="card">
+    <h3>Door Control</h3>
+    <div class="door-grid">
+      <button class="btn-open"  disabled id="btnOpen"  onclick="sendCmd('1')">OPEN</button>
+      <button class="btn-stop"  disabled id="btnStop"  onclick="sendCmd('2')">STOP</button>
+      <button class="btn-close" disabled id="btnClose" onclick="sendCmd('0')">CLOSE</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 onclick="toggleMaint()">
+      Maintenance <span class="arrow" id="arrow">▶</span>
+    </h3>
+    <div class="status-grid" id="statusGrid">
+      <div class="status-item"><div class="label">Door</div><div class="value" id="sDoor">-</div></div>
+      <div class="status-item"><div class="label">WiFi</div><div class="value" id="sWifi">-</div></div>
+      <div class="status-item"><div class="label">RSSI</div><div class="value" id="sRssi">-</div></div>
+      <div class="status-item"><div class="label">HomeKit</div><div class="value" id="sHk">-</div></div>
+      <div class="status-item"><div class="label">Heap</div><div class="value" id="sHeap">-</div></div>
+      <div class="status-item"><div class="label">Firmware</div><div class="value" id="sVer">-</div></div>
+    </div>
+    <div id="maintButtons" style="display:none;">
+      <button class="btn-status" disabled id="btnStatus" onclick="sendCmd('S')">Refresh Status</button>
+      <button class="btn-ap" disabled id="btnAp" onclick="confirmEnableAP()">Enable AP / Config Mode</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="log">Waiting for connection...</div>
+  </div>
+
+<script>
+  const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+  const CHAR_UUID     = "0000ffe1-0000-1000-8000-00805f9b34fb";
+
+  let device = null;
+  let characteristic = null;
+
+  function log(msg) {
+    const box = document.getElementById('log');
+    const time = new Date().toLocaleTimeString();
+    box.innerText = `[${time}] ${msg}\n` + box.innerText;
+  }
+
+  function setConnUI(state) {
+    const dot = document.getElementById('dot');
+    const label = document.getElementById('connLabel');
+    const btnConnect = document.getElementById('btnConnect');
+    dot.className = 'dot';
+    if (state === 'connected') {
+      dot.classList.add('connected');
+      label.innerText = 'Connected';
+      btnConnect.innerText = 'Disconnect';
+      ['btnOpen','btnStop','btnClose','btnStatus','btnAp'].forEach(id => document.getElementById(id).disabled = false);
+    } else if (state === 'connecting') {
+      dot.classList.add('connecting');
+      label.innerText = 'Connecting...';
+    } else {
+      label.innerText = 'Not connected';
+      btnConnect.innerText = 'Connect to Device';
+      ['btnOpen','btnStop','btnClose','btnStatus','btnAp'].forEach(id => document.getElementById(id).disabled = true);
+    }
+  }
+
+  async function connectBLE() {
+    if (characteristic && device && device.gatt.connected) {
+      device.gatt.disconnect();
+      setConnUI('disconnected');
+      log('Disconnected.');
+      return;
+    }
+
+    if (!navigator.bluetooth) {
+      log('ERROR: Web Bluetooth not supported. Use Bluefy browser on iPhone.');
+      return;
+    }
+
+    try {
+      setConnUI('connecting');
+      log('Scanning for device...');
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }]
+      });
+
+      device.addEventListener('gattserverdisconnected', () => {
+        setConnUI('disconnected');
+        log('Device disconnected.');
+      });
+
+      log('Connecting to GATT server...');
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      characteristic = await service.getCharacteristic(CHAR_UUID);
+
+      setConnUI('connected');
+      log('Connected! Ready to send commands.');
+    } catch (err) {
+      setConnUI('disconnected');
+      log('Connection failed: ' + err.message);
+    }
+  }
+
+  async function sendCmd(cmd) {
+    if (!characteristic) { log('Not connected.'); return; }
+    const pwd = document.getElementById('pwd').value;
+    if (!pwd) { log('Enter BLE password first.'); return; }
+
+    const payload = pwd + cmd;
+    try {
+      const encoder = new TextEncoder();
+      await characteristic.writeValue(encoder.encode(payload));
+      log('Sent command: ' + cmd);
+
+      if (cmd === 'S') {
+        setTimeout(readStatus, 400);
+      }
+    } catch (err) {
+      log('Send failed: ' + err.message);
+    }
+  }
+
+  async function readStatus() {
+    if (!characteristic) return;
+    try {
+      const value = await characteristic.readValue();
+      const decoder = new TextDecoder('utf-8');
+      const text = decoder.decode(value);
+      log('Status reply: ' + text);
+      parseStatus(text);
+    } catch (err) {
+      log('Read failed: ' + err.message);
+    }
+  }
+
+  function parseStatus(text) {
+    // Format: OK|DOOR|WIFI|RSSI|HOMEKIT|HEAP|VERSION
+    const parts = text.split('|');
+    if (parts[0] !== 'OK' || parts.length < 7) {
+      log('Unexpected status format.');
+      return;
+    }
+    document.getElementById('sDoor').innerText = parts[1];
+    document.getElementById('sWifi').innerText = parts[2];
+    document.getElementById('sRssi').innerText = parts[3] + ' dBm';
+    document.getElementById('sHk').innerText = parts[4];
+    document.getElementById('sHeap').innerText = parts[5] + ' B';
+    document.getElementById('sVer').innerText = parts[6];
+  }
+
+  function toggleMaint() {
+    const grid = document.getElementById('statusGrid');
+    const btns = document.getElementById('maintButtons');
+    const arrow = document.getElementById('arrow');
+    const isOpen = grid.classList.toggle('visible');
+    btns.style.display = isOpen ? 'block' : 'none';
+    arrow.classList.toggle('open', isOpen);
+  }
+
+  function confirmEnableAP() {
+    if (confirm('Enable AP / Config mode?\n\nThis will temporarily stop normal operation so you can reconfigure WiFi. Continue?')) {
+      sendCmd('A');
+    }
+  }
+</script>
+</body>
+</html>
