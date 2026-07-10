@@ -29,6 +29,8 @@
     margin-bottom: 14px;
     border: 1px solid #e8f1fc;
   }
+  .card h3 { margin: 0 0 10px; font-size: 15px; color: #1a2b4c; }
+
   .conn-row {
     display: flex;
     align-items: center;
@@ -44,6 +46,7 @@
   .dot.connecting { background: #fbbc04; animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
   #connLabel { font-weight: 600; font-size: 14px; flex: 1; }
+
   button {
     border: none; border-radius: 10px; color: white;
     font-size: 15px; font-weight: 600; cursor: pointer;
@@ -59,29 +62,13 @@
     font-size:14px;
   }
 
-  .door-grid {
-    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
-  }
+  .door-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
   .btn-open  { background: linear-gradient(135deg,#66bb6a,#34a853); }
   .btn-stop  { background: linear-gradient(135deg,#ffca28,#fbbc04); color:#333; }
   .btn-close { background: linear-gradient(135deg,#ef5350,#ea4335); }
   .door-grid button { padding: 18px 4px; font-size: 14px; }
 
-  .card h3 {
-    margin: 0 0 10px; font-size: 15px; color: #1a2b4c;
-    display:flex; align-items:center; justify-content:space-between; cursor:pointer;
-  }
-  .arrow { transition: transform .2s; font-size: 12px; color:#7a8aa0; }
-  .arrow.open { transform: rotate(90deg); }
-
-  .status-grid { display:none; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; margin-bottom:10px; }
-  .status-grid.visible { display:grid; }
-  .status-item { background:#f5faff; border-radius:8px; padding:8px 10px; }
-  .status-item .label { color:#7a8aa0; font-size:11px; }
-  .status-item .value { font-weight:600; color:#1a2b4c; }
-
-  .btn-status { background: linear-gradient(135deg,#5c6bc0,#3949ab); width:100%; }
-  .btn-ap { background: linear-gradient(135deg,#ff7043,#e64a19); width:100%; margin-top:10px; }
+  .btn-ap { background: linear-gradient(135deg,#ff7043,#e64a19); width:100%; }
 
   #log {
     background: #0f1b2d; color: #4fd1c5; padding: 12px;
@@ -115,14 +102,8 @@
   </div>
 
   <div class="card">
-   <div class="card">
     <h3>Maintenance</h3>
-    <button class="btn-ap" id="btnAp" onclick="confirmEnableAP()">Enable AP / Config Mode</button>
-   </div>
-
-    <div id="maintButtons" style="display:none;">
-      <button class="btn-ap" disabled id="btnAp" onclick="confirmEnableAP()">Enable AP / Config Mode</button>
-    </div>
+    <button class="btn-ap" disabled id="btnAp" onclick="confirmEnableAP()">Enable AP / Config Mode</button>
   </div>
 
   <div class="card">
@@ -147,18 +128,23 @@
     const label = document.getElementById('connLabel');
     const btnConnect = document.getElementById('btnConnect');
     dot.className = 'dot';
+    // v12.6.2: chỉ còn 4 nút thật sự tồn tại trong HTML —
+    // đã bỏ 'btnStatus' (không còn phần tử này) tránh lỗi
+    // getElementById(...).disabled trên null
+    const ids = ['btnOpen', 'btnStop', 'btnClose', 'btnAp'];
+
     if (state === 'connected') {
       dot.classList.add('connected');
       label.innerText = 'Connected';
       btnConnect.innerText = 'Disconnect';
-      ['btnOpen','btnStop','btnClose','btnStatus','btnAp'].forEach(id => document.getElementById(id).disabled = false);
+      ids.forEach(id => document.getElementById(id).disabled = false);
     } else if (state === 'connecting') {
       dot.classList.add('connecting');
       label.innerText = 'Connecting...';
     } else {
       label.innerText = 'Not connected';
       btnConnect.innerText = 'Connect to Device';
-      ['btnOpen','btnStop','btnClose','btnStatus','btnAp'].forEach(id => document.getElementById(id).disabled = true);
+      ids.forEach(id => document.getElementById(id).disabled = true);
     }
   }
 
@@ -200,6 +186,8 @@
     }
   }
 
+  // v12.6.2: sendCmd() đã bỏ hẳn nhánh xử lý lệnh 'S' (STATUS) —
+  // firmware không còn hỗ trợ lệnh này, không cần đọc phản hồi
   async function sendCmd(cmd) {
     if (!characteristic) { log('Not connected.'); return; }
     const pwd = document.getElementById('pwd').value;
@@ -210,50 +198,9 @@
       const encoder = new TextEncoder();
       await characteristic.writeValue(encoder.encode(payload));
       log('Sent command: ' + cmd);
-
-      if (cmd === 'S') {
-        setTimeout(readStatus, 400);
-      }
     } catch (err) {
       log('Send failed: ' + err.message);
     }
-  }
-
-  async function readStatus() {
-    if (!characteristic) return;
-    try {
-      const value = await characteristic.readValue();
-      const decoder = new TextDecoder('utf-8');
-      const text = decoder.decode(value);
-      log('Status reply: ' + text);
-      parseStatus(text);
-    } catch (err) {
-      log('Read failed: ' + err.message);
-    }
-  }
-
-  function parseStatus(text) {
-    // Format: OK|DOOR|WIFI|RSSI|HOMEKIT|HEAP|VERSION
-    const parts = text.split('|');
-    if (parts[0] !== 'OK' || parts.length < 7) {
-      log('Unexpected status format.');
-      return;
-    }
-    document.getElementById('sDoor').innerText = parts[1];
-    document.getElementById('sWifi').innerText = parts[2];
-    document.getElementById('sRssi').innerText = parts[3] + ' dBm';
-    document.getElementById('sHk').innerText = parts[4];
-    document.getElementById('sHeap').innerText = parts[5] + ' B';
-    document.getElementById('sVer').innerText = parts[6];
-  }
-
-  function toggleMaint() {
-    const grid = document.getElementById('statusGrid');
-    const btns = document.getElementById('maintButtons');
-    const arrow = document.getElementById('arrow');
-    const isOpen = grid.classList.toggle('visible');
-    btns.style.display = isOpen ? 'block' : 'none';
-    arrow.classList.toggle('open', isOpen);
   }
 
   function confirmEnableAP() {
