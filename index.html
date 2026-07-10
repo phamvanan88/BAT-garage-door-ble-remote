@@ -188,7 +188,34 @@
 
   // v12.6.2: sendCmd() đã bỏ hẳn nhánh xử lý lệnh 'S' (STATUS) —
   // firmware không còn hỗ trợ lệnh này, không cần đọc phản hồi
-sendCmd
+async function sendCmd(cmd) {
+  if (!characteristic) { log('Not connected.'); return; }
+  const pwd = document.getElementById('pwd').value;
+  if (!pwd) { log('Enter BLE password first.'); return; }
+
+  const payload = pwd + cmd;
+  try {
+    const encoder = new TextEncoder();
+    await characteristic.writeValue(encoder.encode(payload));
+
+    // v12.6.2 fix: đọc lại phản hồi thật từ ESP32 (OK/ERR)
+    // thay vì chỉ log cố định "Sent command"
+    await new Promise(r => setTimeout(r, 150)); // chờ callback onWrite() xử lý xong
+    const value = await characteristic.readValue();
+    const decoder = new TextDecoder('utf-8');
+    const response = decoder.decode(value);
+
+    if (response.startsWith('ERR')) {
+      log('❌ ' + response);
+    } else if (response.startsWith('OK')) {
+      log('✅ Command ' + cmd + ' → ' + response);
+    } else {
+      log('Sent command: ' + cmd + ' (raw: ' + response + ')');
+    }
+  } catch (err) {
+    log('Send failed: ' + err.message);
+  }
+}
 
   function confirmEnableAP() {
     if (confirm('Enable AP / Config mode?\n\nThis will temporarily stop normal operation so you can reconfigure WiFi. Continue?')) {
