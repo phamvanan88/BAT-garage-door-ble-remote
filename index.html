@@ -188,20 +188,7 @@
 
   // v12.6.2: sendCmd() đã bỏ hẳn nhánh xử lý lệnh 'S' (STATUS) —
   // firmware không còn hỗ trợ lệnh này, không cần đọc phản hồi
-  async function sendCmd(cmd) {
-    if (!characteristic) { log('Not connected.'); return; }
-    const pwd = document.getElementById('pwd').value;
-    if (!pwd) { log('Enter BLE password first.'); return; }
-
-    const payload = pwd + cmd;
-    try {
-      const encoder = new TextEncoder();
-      await characteristic.writeValue(encoder.encode(payload));
-      log('Sent command: ' + cmd);
-    } catch (err) {
-      log('Send failed: ' + err.message);
-    }
-  }
+sendCmd
 
   function confirmEnableAP() {
     if (confirm('Enable AP / Config mode?\n\nThis will temporarily stop normal operation so you can reconfigure WiFi. Continue?')) {
